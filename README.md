@@ -16,7 +16,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/Bithack/go-hnsw"
+	"github.com/darwayne/go-hnsw"
 )
 
 func main() {
@@ -43,7 +43,7 @@ func main() {
 	
 	start := time.Now()
 	for i := 0; i < 1000; i++ {
-		Search(randomPoint, efSearch, K)
+		h.Search(randomPoint(), efSearch, K)
 	}
 	stop := time.Since(start)
 
