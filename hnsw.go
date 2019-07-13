@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math"
 	"math/rand"
 	"os"
@@ -49,7 +50,7 @@ type Hnsw struct {
 	enterpoint uint32
 }
 
-// Load opens a index file previously written by Save(). Returnes a new index and the timestamp the file was written
+// Load opens a index file previously written by Save(). Returns a new index and the timestamp the file was written
 func Load(filename string) (*Hnsw, int64, error) {
 	f, err := os.Open(filename)
 	if err != nil {
@@ -97,7 +98,7 @@ func Load(filename string) (*Hnsw, int64, error) {
 			h.nodes[i].friends[j] = make([]uint32, l)
 			err = binary.Read(z, binary.LittleEndian, h.nodes[i].friends[j])
 			if err != nil {
-				panic(err)
+				return nil, 0, err
 			}
 		}
 
@@ -111,10 +112,17 @@ func Load(filename string) (*Hnsw, int64, error) {
 
 // Save writes to current index to a gzipped binary data file
 func (h *Hnsw) Save(filename string) error {
-	f, err := os.Create(filename)
+	f, err := ioutil.TempFile("", "hnsw")
 	if err != nil {
 		return err
 	}
+
+	defer func() {
+		if err != nil {
+			os.Remove(f.Name())
+		}
+	}()
+
 	z := gzip.NewWriter(f)
 
 	timestamp := time.Now().Unix()
@@ -152,13 +160,15 @@ func (h *Hnsw) Save(filename string) error {
 			writeInt32(l, z)
 			err = binary.Write(z, binary.LittleEndian, f)
 			if err != nil {
-				panic(err)
+				return err
 			}
 		}
 	}
 
 	z.Close()
 	f.Close()
+
+	os.Rename(f.Name(), filename)
 
 	return nil
 }
