@@ -26,15 +26,16 @@ var useAVX bool
 var useSSE4 bool
 
 type DistanceFunction func([]float32, []float32) float32
+
 var DefaultDistFunc DistanceFunction
 
-func init(){
+func init() {
 	useAVX2 = cpu.X86.HasAVX2
 	useAVX = cpu.X86.HasAVX
 	useSSE4 = cpu.X86.HasSSE41
 
 	switch {
-	case useAVX,useAVX2:
+	case useAVX, useAVX2:
 		log.Println("AVX instruction set detected")
 		DefaultDistFunc = f32.L2Squared8AVX
 	case useSSE4:
@@ -267,7 +268,6 @@ func (h *Hnsw) getFriends(n uint32, level int) []uint32 {
 }
 
 func (h *Hnsw) Link(first, second uint32, level int) {
-
 	maxL := h.M
 	if level == 0 {
 		maxL = h.M0
@@ -408,7 +408,6 @@ func (h *Hnsw) getNeighborsByHeuristicClosestFirst(resultSet *distqueue.DistQueu
 }
 
 func New(M int, efConstruction int, first Point) *Hnsw {
-
 	h := Hnsw{}
 	h.M = M
 	// default values used in c++ implementation
@@ -430,10 +429,10 @@ func New(M int, efConstruction int, first Point) *Hnsw {
 func (h *Hnsw) Stats() string {
 	var str strings.Builder
 	str.WriteString("HNSW Index\n")
-	str.WriteString( fmt.Sprintf("M: %v, efConstruction: %v\n", h.M, h.efConstruction))
-	str.WriteString( fmt.Sprintf("DelaunayType: %v\n", h.DelaunayType))
-	str.WriteString( fmt.Sprintf("Number of nodes: %v\n", len(h.nodes)))
-	str.WriteString( fmt.Sprintf("Max layer: %v\n", h.maxLayer))
+	str.WriteString(fmt.Sprintf("M: %v, efConstruction: %v\n", h.M, h.efConstruction))
+	str.WriteString(fmt.Sprintf("DelaunayType: %v\n", h.DelaunayType))
+	str.WriteString(fmt.Sprintf("Number of nodes: %v\n", len(h.nodes)))
+	str.WriteString(fmt.Sprintf("Max layer: %v\n", h.maxLayer))
 	memoryUseData := 0
 	memoryUseIndex := 0
 	levCount := make([]int, h.maxLayer+1)
@@ -471,7 +470,6 @@ func (h *Hnsw) Grow(size int) {
 }
 
 func (h *Hnsw) Add(q Point, id uint32) {
-
 	if id == 0 {
 		panic("Id 0 is reserved, use ID:s starting from 1 when building index")
 	}
@@ -550,7 +548,6 @@ func (h *Hnsw) Add(q Point, id uint32) {
 }
 
 func (h *Hnsw) searchAtLayer(q Point, resultSet *distqueue.DistQueueClosestLast, efConstruction int, ep *distqueue.Item, level int) {
-
 	var pool, visited = h.bitset.Get()
 	//visited := make(map[uint32]bool)
 
@@ -632,7 +629,6 @@ func (h *Hnsw) Benchmark(q Point, ef int, K int) float64 {
 }
 
 func (h *Hnsw) Search(q Point, ef int, K int) *distqueue.DistQueueClosestLast {
-
 	h.RLock()
 	currentMaxLayer := h.maxLayer
 	ep := &distqueue.Item{ID: h.enterpoint, D: h.DistFunc(h.nodes[h.enterpoint].p, q)}

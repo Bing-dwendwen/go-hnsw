@@ -9,7 +9,6 @@ import (
 )
 
 func main() {
-
 	const (
 		M              = 32
 		efConstruction = 400
@@ -60,7 +59,6 @@ func main() {
 
 	fmt.Printf("%v queries / second (single thread)\n", 1000.0/stop.Seconds())
 	fmt.Printf("Average 10-NN precision: %v\n", float64(hits)/(1000.0*float64(K)))
-
 }
 
 func randomPoint() hnsw.Point {
