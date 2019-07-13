@@ -6,16 +6,45 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"math"
 	"math/rand"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/darwayne/go-hnsw/bitsetpool"
 	"github.com/darwayne/go-hnsw/distqueue"
 	"github.com/darwayne/go-hnsw/f32"
+
+	"golang.org/x/sys/cpu"
 )
+
+var useAVX2 bool
+var useAVX bool
+var useSSE4 bool
+
+type DistanceFunction func([]float32, []float32) float32
+var DefaultDistFunc DistanceFunction
+
+func init(){
+	useAVX2 = cpu.X86.HasAVX2
+	useAVX = cpu.X86.HasAVX
+	useSSE4 = cpu.X86.HasSSE41
+
+	switch {
+	case useAVX,useAVX2:
+		log.Println("AVX instruction set detected")
+		DefaultDistFunc = f32.L2Squared8AVX
+	case useSSE4:
+		log.Println("SSE instruction set detected")
+		DefaultDistFunc = f32.L2Squared
+	default:
+		log.Println("No CPU vector extensions detected")
+		DefaultDistFunc = f32.DistGo
+	}
+}
 
 type Point []float32
 
@@ -73,7 +102,7 @@ func Load(filename string) (*Hnsw, int64, error) {
 	h.maxLayer = readInt32(z)
 	h.enterpoint = uint32(readInt32(z))
 
-	h.DistFunc = f32.L2Squared8AVX
+	h.DistFunc = DefaultDistFunc
 	h.bitset = bitsetpool.New()
 
 	l := readInt32(z)
@@ -104,8 +133,12 @@ func Load(filename string) (*Hnsw, int64, error) {
 
 	}
 
-	z.Close()
-	f.Close()
+	if err = z.Close(); err != nil {
+		return nil, 0, err
+	}
+	if err = f.Close(); err != nil {
+		return nil, 0, err
+	}
 
 	return h, timestamp, nil
 }
@@ -165,10 +198,16 @@ func (h *Hnsw) Save(filename string) error {
 		}
 	}
 
-	z.Close()
-	f.Close()
+	if err = z.Close(); err != nil {
+		return err
+	}
+	if err = f.Close(); err != nil {
+		return err
+	}
 
-	os.Rename(f.Name(), filename)
+	if err = os.Rename(f.Name(), filename); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -380,20 +419,21 @@ func New(M int, efConstruction int, first Point) *Hnsw {
 
 	h.bitset = bitsetpool.New()
 
-	h.DistFunc = f32.L2Squared8AVX
+	h.DistFunc = DefaultDistFunc
 
 	// add first point, it will be our enterpoint (index 0)
-	h.nodes = []node{node{level: 0, p: first}}
+	h.nodes = []node{{level: 0, p: first}}
 
 	return &h
 }
 
 func (h *Hnsw) Stats() string {
-	s := "HNSW Index\n"
-	s = s + fmt.Sprintf("M: %v, efConstruction: %v\n", h.M, h.efConstruction)
-	s = s + fmt.Sprintf("DelaunayType: %v\n", h.DelaunayType)
-	s = s + fmt.Sprintf("Number of nodes: %v\n", len(h.nodes))
-	s = s + fmt.Sprintf("Max layer: %v\n", h.maxLayer)
+	var str strings.Builder
+	str.WriteString("HNSW Index\n")
+	str.WriteString( fmt.Sprintf("M: %v, efConstruction: %v\n", h.M, h.efConstruction))
+	str.WriteString( fmt.Sprintf("DelaunayType: %v\n", h.DelaunayType))
+	str.WriteString( fmt.Sprintf("Number of nodes: %v\n", len(h.nodes)))
+	str.WriteString( fmt.Sprintf("Max layer: %v\n", h.maxLayer))
 	memoryUseData := 0
 	memoryUseIndex := 0
 	levCount := make([]int, h.maxLayer+1)
@@ -413,11 +453,12 @@ func (h *Hnsw) Stats() string {
 	}
 	for i := range levCount {
 		avg := conns[i] / max(1, connsC[i])
-		s = s + fmt.Sprintf("Level %v: %v nodes, average number of connections %v\n", i, levCount[i], avg)
+		str.WriteString(fmt.Sprintf("Level %v: %v nodes, average number of connections %v\n", i, levCount[i], avg))
 	}
-	s = s + fmt.Sprintf("Memory use for data: %v (%v bytes / point)\n", memoryUseData, memoryUseData/len(h.nodes))
-	s = s + fmt.Sprintf("Memory use for index: %v (avg %v bytes / point)\n", memoryUseIndex, memoryUseIndex/len(h.nodes))
-	return s
+	str.WriteString(fmt.Sprintf("Memory use for data: %v (%v bytes / point)\n", memoryUseData, memoryUseData/len(h.nodes)))
+	str.WriteString(fmt.Sprintf("Memory use for index: %v (avg %v bytes / point)\n", memoryUseIndex, memoryUseIndex/len(h.nodes)))
+
+	return str.String()
 }
 
 func (h *Hnsw) Grow(size int) {
@@ -427,7 +468,6 @@ func (h *Hnsw) Grow(size int) {
 	newNodes := make([]node, len(h.nodes), size+1)
 	copy(newNodes, h.nodes)
 	h.nodes = newNodes
-
 }
 
 func (h *Hnsw) Add(q Point, id uint32) {
@@ -487,7 +527,7 @@ func (h *Hnsw) Add(q Point, id uint32) {
 	}
 
 	h.Lock()
-	// Add it and increase slice length if neccessary
+	// Add it and increase slice length if necessary
 	if len(h.nodes) < int(newID)+1 {
 		h.nodes = h.nodes[0 : newID+1]
 	}
