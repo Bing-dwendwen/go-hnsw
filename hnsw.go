@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/darwayne/go-hnsw/bitsetpool"
@@ -68,6 +69,7 @@ type Hnsw struct {
 	efConstruction int
 	linkMode       int
 	DelaunayType   int
+	nextID         uint32
 
 	DistFunc func([]float32, []float32) float32
 
@@ -102,6 +104,7 @@ func Load(filename string) (*Hnsw, int64, error) {
 	h.LevelMult = readFloat64(z)
 	h.maxLayer = readInt32(z)
 	h.enterpoint = uint32(readInt32(z))
+	h.nextID = uint32(readInt32(z))
 
 	h.DistFunc = DefaultDistFunc
 	h.bitset = bitsetpool.New()
@@ -116,7 +119,7 @@ func Load(filename string) (*Hnsw, int64, error) {
 
 		err = binary.Read(z, binary.LittleEndian, h.nodes[i].p)
 		if err != nil {
-			panic(err)
+			return nil, 0, err
 		}
 		h.nodes[i].level = readInt32(z)
 
@@ -131,7 +134,6 @@ func Load(filename string) (*Hnsw, int64, error) {
 				return nil, 0, err
 			}
 		}
-
 	}
 
 	if err = z.Close(); err != nil {
@@ -171,6 +173,7 @@ func (h *Hnsw) Save(filename string) error {
 	writeFloat64(h.LevelMult, z)
 	writeInt32(h.maxLayer, z)
 	writeInt32(int(h.enterpoint), z)
+	writeInt32(int(h.nextID), z)
 
 	l := len(h.nodes)
 	writeInt32(l, z)
@@ -183,7 +186,7 @@ func (h *Hnsw) Save(filename string) error {
 		writeInt32(l, z)
 		err = binary.Write(z, binary.LittleEndian, []float32(n.p))
 		if err != nil {
-			panic(err)
+			return err
 		}
 		writeInt32(n.level, z)
 
@@ -265,6 +268,10 @@ func (h *Hnsw) getFriends(n uint32, level int) []uint32 {
 		return make([]uint32, 0)
 	}
 	return h.nodes[n].friends[level]
+}
+
+func (h *Hnsw) NextID() uint32 {
+	return atomic.LoadUint32(&h.nextID)
 }
 
 func (h *Hnsw) Link(first, second uint32, level int) {
@@ -467,6 +474,12 @@ func (h *Hnsw) Grow(size int) {
 	newNodes := make([]node, len(h.nodes), size+1)
 	copy(newNodes, h.nodes)
 	h.nodes = newNodes
+}
+
+func (h *Hnsw) AddPoint(q Point) uint32 {
+	id := atomic.AddUint32(&h.nextID, 1)
+	h.Add(q, id)
+	return id
 }
 
 func (h *Hnsw) Add(q Point, id uint32) {

@@ -3,3 +3,4 @@ siftsmall
 src/
 index.dat
 .idea/
+*.hnsw.idx
