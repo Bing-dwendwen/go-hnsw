@@ -10,6 +10,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -25,6 +26,7 @@ import (
 var useAVX2 bool
 var useAVX bool
 var useSSE4 bool
+var maxWorkers int
 
 type DistanceFunction func([]float32, []float32) float32
 
@@ -34,6 +36,7 @@ func init() {
 	useAVX2 = cpu.X86.HasAVX2
 	useAVX = cpu.X86.HasAVX
 	useSSE4 = cpu.X86.HasSSE41
+	maxWorkers = runtime.NumCPU()
 
 	switch {
 	case useAVX, useAVX2:
@@ -516,25 +519,12 @@ func (h *Hnsw) Add(q Point, id uint32) {
 	// second pass, ef = efConstruction
 	// loop through every level from the new nodes level down to level 0
 	// create new connections in every layer
-	for level := min(curlevel, currentMaxLayer); level >= 0; level-- {
 
-		resultSet := &distqueue.DistQueueClosestLast{}
-		h.searchAtLayer(q, resultSet, h.efConstruction, ep, level)
-		switch h.DelaunayType {
-		case 0:
-			// shrink resultSet to M closest elements (the simple heuristic)
-			for resultSet.Len() > h.M {
-				resultSet.Pop()
-			}
-		case 1:
-			h.getNeighborsByHeuristicClosestLast(resultSet, h.M)
-		}
-		newNode.friends[level] = make([]uint32, resultSet.Len())
-		for i := resultSet.Len() - 1; i >= 0; i-- {
-			item := resultSet.Pop()
-			// store in order, closest at index 0
-			newNode.friends[level][i] = item.ID
-		}
+	initialLevel := min(curlevel, currentMaxLayer)
+	if maxWorkers == 1 {
+		h.sequentialEfConstruction(&newNode, initialLevel, q, ep)
+	} else {
+		h.concurrentEfConstruction(&newNode, initialLevel, q, ep)
 	}
 
 	h.Lock()
@@ -558,6 +548,80 @@ func (h *Hnsw) Add(q Point, id uint32) {
 		h.enterpoint = newID
 	}
 	h.Unlock()
+}
+
+type levelData struct {
+	Data  []uint32
+	Level int
+}
+
+func (h *Hnsw) efConstructionWorker(workChan chan int, dataChan chan levelData, q Point, ep *distqueue.Item, wg *sync.WaitGroup) {
+	for level := range workChan {
+		dataChan <- levelData{
+			Level: level,
+			Data:  h.efConstructLevel(level, q, ep),
+		}
+		wg.Done()
+	}
+}
+
+func (h *Hnsw) concurrentEfConstruction(node *node, currentLevel int, q Point, ep *distqueue.Item) {
+	stream := make(chan levelData, maxWorkers*2)
+	workChan := make(chan int, 1)
+	wg := &sync.WaitGroup{}
+	wg2 := &sync.WaitGroup{}
+
+	wg2.Add(1)
+	go func() {
+		defer wg2.Done()
+		for data := range stream {
+			node.friends[data.Level] = data.Data
+		}
+	}()
+
+	for i := 0; i < maxWorkers; i++ {
+		go h.efConstructionWorker(workChan, stream, q, ep, wg)
+	}
+
+	for level := currentLevel; level >= 0; level-- {
+		wg.Add(1)
+		workChan <- level
+	}
+
+	wg.Wait()
+	close(workChan)
+	close(stream)
+	wg2.Wait()
+}
+
+func (h *Hnsw) sequentialEfConstruction(node *node, currentLevel int, q Point, ep *distqueue.Item) {
+	for level := currentLevel; level >= 0; level-- {
+		node.friends[level] = h.efConstructLevel(level, q, ep)
+	}
+}
+
+func (h *Hnsw) efConstructLevel(level int, q Point, ep *distqueue.Item) []uint32 {
+	resultSet := &distqueue.DistQueueClosestLast{}
+	h.searchAtLayer(q, resultSet, h.efConstruction, ep, level)
+
+	switch h.DelaunayType {
+	case 0:
+		// shrink resultSet to M closest elements (the simple heuristic)
+		for resultSet.Len() > h.M {
+			resultSet.Pop()
+		}
+	case 1:
+		h.getNeighborsByHeuristicClosestLast(resultSet, h.M)
+	}
+
+	info := make([]uint32, resultSet.Len())
+	for i := resultSet.Len() - 1; i >= 0; i-- {
+		item := resultSet.Pop()
+		// store in order, closest at index 0
+		info[i] = item.ID
+	}
+
+	return info
 }
 
 func (h *Hnsw) searchAtLayer(q Point, resultSet *distqueue.DistQueueClosestLast, efConstruction int, ep *distqueue.Item, level int) {

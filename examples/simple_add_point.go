@@ -21,6 +21,7 @@ func main() {
 	h := hnsw.New(M, efConstruction, zero)
 	h.Grow(10000)
 
+	start := time.Now()
 	for i := 1; i <= 10000; i++ {
 		h.AddPoint(randomPoint())
 		if (i)%1000 == 0 {
@@ -43,7 +44,7 @@ func main() {
 
 	fmt.Printf("Now searching with HNSW...\n")
 	hits := 0
-	start := time.Now()
+	start = time.Now()
 	for i := 0; i < 1000; i++ {
 		result := h.Search(queries[i], efSearch, K)
 		for j := 0; j < K; j++ {

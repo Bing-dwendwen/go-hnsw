@@ -27,6 +27,7 @@ func main() {
 	h.Grow(totalVectors)
 
 	queries := make([]hnsw.Point, 0, 1000)
+	start := time.Now()
 	for i := 1; i <= totalVectors; i++ {
 		point := randomPoint()
 		if i <= 1000 {
@@ -34,14 +35,13 @@ func main() {
 		}
 
 		h.AddPoint(point)
-		if (i)%1000 == 0 {
-			fmt.Printf("%v points added\n", i)
-		}
 	}
-
-	start := time.Now()
-	h.Save(filename)
 	t := time.Since(start)
+	fmt.Println("It took", t, "to build", totalVectors, "vectors")
+
+	start = time.Now()
+	h.Save(filename)
+	t = time.Since(start)
 	fmt.Println("It took", t, "to save to index")
 
 	fmt.Printf("=== Generated Results (Next ID: %v) ===\n", h.NextID())
