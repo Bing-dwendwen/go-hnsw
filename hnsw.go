@@ -1,4 +1,4 @@
-package hnsw
+package main
 
 import (
 	"compress/gzip"
@@ -16,9 +16,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/darwayne/go-hnsw/bitsetpool"
-	"github.com/darwayne/go-hnsw/distqueue"
-	"github.com/darwayne/go-hnsw/f32"
+	"github.com/gueluelue/go-hnsw/bitsetpool"
+	"github.com/gueluelue/go-hnsw/distqueue"
+	"github.com/gueluelue/go-hnsw/f32"
 
 	"golang.org/x/sys/cpu"
 )

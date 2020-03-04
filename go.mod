@@ -1,4 +1,4 @@
-module github.com/darwayne/go-hnsw
+module github.com/gueluelue/go-hnsw
 
 go 1.12
 

@@ -1,4 +1,4 @@
-package hnsw
+package main
 
 import (
 	"encoding/binary"

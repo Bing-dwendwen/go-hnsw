@@ -16,7 +16,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/darwayne/go-hnsw"
+	"github.com/gueluelue/go-hnsw"
 )
 
 func main() {
@@ -40,14 +40,14 @@ func main() {
 			fmt.Printf("%v points added\n", i)
 		}
 	}
-	
+
 	start := time.Now()
 	for i := 0; i < 1000; i++ {
 		h.Search(randomPoint(), efSearch, K)
 	}
 	stop := time.Since(start)
 
-	fmt.Printf("%v queries / second (single thread)\n", 1000.0/stop.Seconds())	
+	fmt.Printf("%v queries / second (single thread)\n", 1000.0/stop.Seconds())
 }
 
 func randomPoint() hnsw.Point {
