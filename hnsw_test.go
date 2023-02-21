@@ -1,4 +1,4 @@
-package main
+package gohnsw
 
 import (
 	"encoding/binary"
@@ -35,7 +35,7 @@ func TestSaveLoad(t *testing.T) {
 	assert.Nil(t, err)
 
 	fmt.Printf("Loading from index.dat\n")
-	h2, timestamp, err := Load("index.dat")
+	h2, timestamp, err := Load("index.dat", "")
 	assert.Nil(t, err)
 
 	fmt.Printf("Index loaded, time saved was %v", time.Unix(timestamp, 0))
@@ -53,7 +53,7 @@ func buildIndex() *Hnsw {
 	// BUILD INDEX
 	var p Point
 	p = make([]float32, 128)
-	h := New(4, 200, p)
+	h := New(4, 200, p, "")
 	h.DelaunayType = 1
 	h.Grow(dataSize)
 

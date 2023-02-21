@@ -1,9 +1,13 @@
-package main
+package gohnsw
 
 import (
 	"compress/gzip"
 	"encoding/binary"
 	"fmt"
+	"github.com/Bing-dwendwen/go-hnsw/bitsetpool"
+	"github.com/Bing-dwendwen/go-hnsw/distqueue"
+	"github.com/Bing-dwendwen/go-hnsw/f32"
+	cmap "github.com/orcaman/concurrent-map/v2"
 	"io"
 	"io/ioutil"
 	"log"
@@ -11,14 +15,11 @@ import (
 	"math/rand"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/gueluelue/go-hnsw/bitsetpool"
-	"github.com/gueluelue/go-hnsw/distqueue"
-	"github.com/gueluelue/go-hnsw/f32"
 
 	"golang.org/x/sys/cpu"
 )
@@ -31,6 +32,15 @@ var maxWorkers int
 type DistanceFunction func([]float32, []float32) float32
 
 var DefaultDistFunc DistanceFunction
+
+type DistPolicyType string
+
+const (
+	L2Squared8AVX DistPolicyType = "l2Squared8AVX"
+	L2Squared     DistPolicyType = "l2Squared"
+	Cos           DistPolicyType = "cos"
+	NormalizedCos DistPolicyType = "normalizedCos"
+)
 
 func init() {
 	useAVX2 = cpu.X86.HasAVX2
@@ -47,7 +57,7 @@ func init() {
 		DefaultDistFunc = f32.L2Squared
 	default:
 		log.Println("No CPU vector extensions detected")
-		DefaultDistFunc = f32.DistGo
+		DefaultDistFunc = f32.CalCos
 	}
 }
 
@@ -73,6 +83,7 @@ type Hnsw struct {
 	linkMode       int
 	DelaunayType   int
 	nextID         uint32
+	IdMap          cmap.ConcurrentMap[string, uint32]
 
 	DistFunc func([]float32, []float32) float32
 
@@ -85,8 +96,25 @@ type Hnsw struct {
 	enterpoint uint32
 }
 
+func (h *Hnsw) ChoiceDistPolicy(distPolicy DistPolicyType) {
+	switch distPolicy {
+	case L2Squared8AVX:
+		h.DistFunc = f32.L2Squared8AVX
+		log.Println("choice L2Squared8AVX")
+	case L2Squared:
+		h.DistFunc = f32.L2Squared
+		log.Println("choice L2Squared")
+	case NormalizedCos:
+		h.DistFunc = f32.CalNormalizedCos
+		log.Println("choice CalNormalizedCos")
+	default:
+		h.DistFunc = f32.CalCos
+		log.Println("choice CalCos")
+	}
+}
+
 // Load opens a index file previously written by Save(). Returns a new index and the timestamp the file was written
-func Load(filename string) (*Hnsw, int64, error) {
+func Load(filename string, distPolicyType DistPolicyType) (*Hnsw, int64, error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return nil, 0, err
@@ -109,7 +137,8 @@ func Load(filename string) (*Hnsw, int64, error) {
 	h.enterpoint = uint32(readInt32(z))
 	h.nextID = uint32(readInt32(z))
 
-	h.DistFunc = DefaultDistFunc
+	//h.DistFunc = DefaultDistFunc
+	h.ChoiceDistPolicy(distPolicyType)
 	h.bitset = bitsetpool.New()
 
 	l := readInt32(z)
@@ -417,7 +446,7 @@ func (h *Hnsw) getNeighborsByHeuristicClosestFirst(resultSet *distqueue.DistQueu
 	}
 }
 
-func New(M int, efConstruction int, first Point) *Hnsw {
+func New(M int, efConstruction int, first Point, distPolicyType DistPolicyType) *Hnsw {
 	h := Hnsw{}
 	h.M = M
 	// default values used in c++ implementation
@@ -432,6 +461,8 @@ func New(M int, efConstruction int, first Point) *Hnsw {
 
 	// add first point, it will be our enterpoint (index 0)
 	h.nodes = []node{{level: 0, p: first}}
+
+	h.IdMap = cmap.New[uint32]()
 
 	return &h
 }
@@ -479,9 +510,10 @@ func (h *Hnsw) Grow(size int) {
 	h.nodes = newNodes
 }
 
-func (h *Hnsw) AddPoint(q Point) uint32 {
+func (h *Hnsw) AddPoint(q Point, realId uint32) uint32 {
 	id := atomic.AddUint32(&h.nextID, 1)
 	h.Add(q, id)
+	h.IdMap.Set(strconv.FormatUint(uint64(id), 10), realId)
 	return id
 }
 

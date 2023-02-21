@@ -1,12 +1,11 @@
-package main
+package exmaples
 
 import (
 	"fmt"
+	"github.com/Bing-dwendwen/go-hnsw"
 	"math/rand"
 	"os"
 	"time"
-
-	"github.com/gueluelue/go-hnsw"
 )
 
 func main() {
@@ -21,12 +20,12 @@ func main() {
 
 	defer os.Remove(filename)
 
-	var zero hnsw.Point = make([]float32, 128)
+	var zero gohnsw.Point = make([]float32, 128)
 
-	h := hnsw.New(M, efConstruction, zero)
+	h := gohnsw.New(M, efConstruction, zero, "")
 	h.Grow(totalVectors)
 
-	queries := make([]hnsw.Point, 0, 1000)
+	queries := make([]gohnsw.Point, 0, 1000)
 	start := time.Now()
 	for i := 1; i <= totalVectors; i++ {
 		point := randomPoint()
@@ -34,7 +33,7 @@ func main() {
 			queries = append(queries, point)
 		}
 
-		h.AddPoint(point)
+		h.AddPoint(point, uint32(i))
 	}
 	t := time.Since(start)
 	fmt.Println("It took", t, "to build", totalVectors, "vectors")
@@ -48,14 +47,14 @@ func main() {
 	search(h, queries, efSearch, K)
 
 	start = time.Now()
-	h, _, _ = hnsw.Load(filename)
+	h, _, _ = gohnsw.Load(filename, "")
 	t = time.Since(start)
 	fmt.Printf("=== Loaded Index Results (Next ID: %v) ===\n", h.NextID())
 	fmt.Println("It took", t, "to load index")
 	search(h, queries, efSearch, K)
 }
 
-func search(h *hnsw.Hnsw, queries []hnsw.Point, efSearch, K int) {
+func search(h *gohnsw.Hnsw, queries []gohnsw.Point, efSearch, K int) {
 	fmt.Printf("Generating queries and calculating true answers using bruteforce search...\n")
 	truth := make([][]uint32, 1000)
 	for i := range queries {
@@ -87,8 +86,8 @@ func search(h *hnsw.Hnsw, queries []hnsw.Point, efSearch, K int) {
 	fmt.Printf("Average 10-NN precision: %v\n", float64(hits)/(1000.0*float64(K)))
 }
 
-func randomPoint() hnsw.Point {
-	var v hnsw.Point = make([]float32, 128)
+func randomPoint() gohnsw.Point {
+	var v gohnsw.Point = make([]float32, 128)
 	for i := range v {
 		v[i] = rand.Float32()
 	}

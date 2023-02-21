@@ -16,7 +16,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/gueluelue/go-hnsw"
+	"github.com/Bing-dwendwen/go-hnsw"
 )
 
 func main() {
@@ -28,9 +28,9 @@ func main() {
 		K              = 10
 	)
 
-	var zero hnsw.Point = make([]float32, 128)
+	var zero gohnsw.Point = make([]float32, 128)
 
-	h := hnsw.New(M, efConstruction, zero)
+	h := gohnsw.New(M, efConstruction, zero, "")
 	h.Grow(10000)
 
     // Note that added ID:s must start from 1
@@ -50,8 +50,8 @@ func main() {
 	fmt.Printf("%v queries / second (single thread)\n", 1000.0/stop.Seconds())
 }
 
-func randomPoint() hnsw.Point {
-	var v hnsw.Point = make([]float32, 128)
+func randomPoint() gohnsw.Point {
+	var v gohnsw.Point = make([]float32, 128)
 	for i := range v {
 		v[i] = rand.Float32()
 	}

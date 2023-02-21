@@ -1,11 +1,10 @@
-package main
+package exmaples
 
 import (
 	"fmt"
+	"github.com/Bing-dwendwen/go-hnsw"
 	"math/rand"
 	"time"
-
-	"github.com/gueluelue/go-hnsw"
 )
 
 func main() {
@@ -16,21 +15,22 @@ func main() {
 		K              = 10
 	)
 
-	var zero hnsw.Point = make([]float32, 128)
+	var zero gohnsw.Point = make([]float32, 128)
 
-	h := hnsw.New(M, efConstruction, zero)
+	h := gohnsw.New(M, efConstruction, zero, "")
 	h.Grow(10000)
 
 	start := time.Now()
+	rand.Seed(time.Now().Unix())
 	for i := 1; i <= 10000; i++ {
-		h.AddPoint(randomPoint())
+		h.AddPoint(randomPoint(), rand.Uint32())
 		if (i)%1000 == 0 {
 			fmt.Printf("%v points added\n", i)
 		}
 	}
 
 	fmt.Printf("Generating queries and calculating true answers using bruteforce search...\n")
-	queries := make([]hnsw.Point, 1000)
+	queries := make([]gohnsw.Point, 1000)
 	truth := make([][]uint32, 1000)
 	for i := range queries {
 		queries[i] = randomPoint()
@@ -60,12 +60,4 @@ func main() {
 
 	fmt.Printf("%v queries / second (single thread)\n", 1000.0/stop.Seconds())
 	fmt.Printf("Average 10-NN precision: %v\n", float64(hits)/(1000.0*float64(K)))
-}
-
-func randomPoint() hnsw.Point {
-	var v hnsw.Point = make([]float32, 128)
-	for i := range v {
-		v[i] = rand.Float32()
-	}
-	return v
 }
